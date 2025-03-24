@@ -1,0 +1,217 @@
+﻿CREATE DATABASE QLYCHANNUOI;
+USE QLYCHANNUOI;
+
+CREATE TABLE CSCHANNUOI (
+    MACS VARCHAR(10) PRIMARY KEY,
+    TENCS VARCHAR(255),
+    LOAICS VARCHAR(255),
+    NGDAIDIEN VARCHAR(255),
+    NGTL DATE,
+    DTHOAI VARCHAR(15)
+);
+
+CREATE TABLE GIONGVN (
+    MAGIONG VARCHAR(10) PRIMARY KEY,
+    TENGIONG VARCHAR(255),
+    LOAIVN VARCHAR(255)
+);
+
+CREATE TABLE DIEUKIENCN (
+    MADK VARCHAR(10) PRIMARY KEY,
+    MACS VARCHAR(10),
+    QUYMO INT,
+    KCXLCT INT,
+    KCKDC INT,
+    FOREIGN KEY (MACS) REFERENCES CSCHANNUOI(MACS)
+);
+
+CREATE TABLE GPCN (
+    MAGP VARCHAR(10) PRIMARY KEY,
+    MACS VARCHAR(10),
+    NGCAP DATE,
+    SOGP VARCHAR(255),
+    SOGIONG INT,
+    FOREIGN KEY (MACS) REFERENCES CSCHANNUOI(MACS)
+);
+
+CREATE TABLE CTGP (
+    MAGP VARCHAR(10),
+    MAGIONG VARCHAR(10),
+    SL INT,
+    PRIMARY KEY (MAGP, MAGIONG),
+    FOREIGN KEY (MAGP) REFERENCES GPCN(MAGP),
+    FOREIGN KEY (MAGIONG) REFERENCES GIONGVN(MAGIONG)
+);
+
+CREATE TABLE DOTCN (
+    MADOTCN VARCHAR(10) PRIMARY KEY,
+    MACS VARCHAR(10),
+    MAGIONG VARCHAR(10),
+    SLVN INT,
+    NGBD DATE,
+    PHGTHUC VARCHAR(255),
+    NGXUATDK DATE,
+    FOREIGN KEY (MACS) REFERENCES CSCHANNUOI(MACS),
+    FOREIGN KEY (MAGIONG) REFERENCES GIONGVN(MAGIONG)
+);
+
+-- Thêm dữ liệu vào bảng CSCHANNUOI
+INSERT INTO CSCHANNUOI (MACS, TENCS, LOAICS, NGDAIDIEN, NGTL, DTHOAI) VALUES
+('CS001', 'Hoang mai', 'Nong ho', 'Nguyen Thanh Son', '2019-10-19', '0971507394'),
+('CS002', 'Cong ty TNHH Phung Dau Son', 'Trang trai quy mo vua', 'Pham The Hung', '2009-10-20', '0364266792'),
+('CS003', 'Green Farm', 'Trang trai quy mo nho', 'Ho Trung Dai', '2018-09-15', '0356266782');
+
+-- Thêm dữ liệu vào bảng GIONGVN
+INSERT INTO GIONGVN (MAGIONG, TENGIONG, LOAIVN) VALUES
+('G001', 'Bo vang Viet Nam', 'Bo'),
+('G002', 'Bo Bay Nui', 'Bo'),
+('G003', 'De nui Ninh Binh', 'De');
+
+-- Thêm dữ liệu vào bảng DIEUKIENCN
+INSERT INTO DIEUKIENCN (MADK, MACS, QUYMO, KCXLCT, KCKDC) VALUES
+('DK001', 'CS001', 10, 250, 300),
+('DK002', 'CS001', 10, 200, 350),
+('DK003', 'CS003', 30, 350, 400);
+
+-- Thêm dữ liệu vào bảng GPCN
+INSERT INTO GPCN (MAGP, MACS, NGCAP, SOGP, SOGIONG) VALUES
+('GP001', 'CS001', '2020-10-10', '42/001/2020/DKCN', 1),
+('GP002', 'CS001', '2020-09-08', '43/001/2020/DKCN', 2),
+('GP003', 'CS002', '2010-06-04', '2/002/2010/DKCN', 4);
+
+-- Thêm dữ liệu vào bảng CTGP
+INSERT INTO CTGP (MAGP, MAGIONG, SL) VALUES
+('GP001', 'G001', 10),
+('GP002', 'G002', 10),
+('GP002', 'G003', 10);
+
+-- Thêm dữ liệu vào bảng DOTCN
+INSERT INTO DOTCN (MADOTCN, MACS, MAGIONG, SLVN, NGBD, PHGTHUC, NGXUATDK) VALUES
+('D001', 'CS001', 'G001', 5, '2021-06-15', 'Tha tu do', '2023-05-15'),
+('D002', 'CS001', 'G002', 5, '2021-07-15', 'Tha tu do', '2023-05-10'),
+('D003', 'CS003', 'G001', 25, '2021-09-20', 'Tha tu do', '2022-03-10');
+
+-- CÂU 3 Hiện thực ràng buộc toàn vẹn sau: số lượng vật nuôi từ 100 trở lên không được 
+-- phép chăn nuôi theo phương thức “thả tự do” (1đ). 
+-- CÂU NÀO LÀM DC CONSTRAINT MÀ KHÔNG LÀM CONSTRAINT SẼ MẤT 50% SỐ ĐIỂM VÌ LÀM TRIGGER
+ALTER TABLE DOTCN
+ADD CONSTRAINT CK_SLUONG CHECK(NOT(SLVN >= 100 AND PHGTHUC = 'Tha tu do'))
+
+DROP TRIGGER TRGSLG_VATNUOI
+CREATE TRIGGER TRGSLG_VATNUOI ON DOTCN
+FOR INSERT, UPDATE
+AS
+BEGIN
+	DECLARE @SLVN INT, @PHGTHUC VARCHAR(255)
+	SELECT @SLVN = SLVN, @PHGTHUC = PHGTHUC
+	FROM INSERTED
+	IF(@SLVN >= 100 AND @PHGTHUC = 'Tha tu do')
+	BEGIN
+		ROLLBACK TRAN
+		PRINT N'Số lượng vật nuôi từ 100 trở lên không được phép chăn nuôi theo phương thức thả tự do'
+	END
+	ELSE
+	BEGIN
+		PRINT N'Thêm thành công'
+	END
+END
+-- 4. Hiện thực ràng buộc toàn vẹn sau: các giống của loại vật nuôi "Bo" có thời gian xuất dự kiến cách ngày bắt đầu nuôi ít nhất 12 tháng (1.5đ).
+GO
+CREATE TRIGGER BO_TRG_THANG ON DOTCN  
+AFTER INSERT
+AS
+BEGIN
+	IF EXISTS(
+				SELECT * 
+				FROM INSERTED I
+				INNER JOIN GIONGVN G
+				ON I.MAGIONG = G.MAGIONG
+				WHERE G.LOAIVN = 'Bo'
+				AND DATEDIFF(MONTH, NGBD,  I.NGXUATDK) < 12
+	)
+	BEGIN
+		RAISERROR(N'LOI: các giống của loại vật nuôi "Bo" có thời gian xuất dự kiến cách ngày bắt đầu nuôi ít nhất 12 tháng', 16, 1)
+		ROLLBACK TRAN
+	END
+END
+GO
+CREATE TRIGGER TRG_BO_THANG ON DOTCN
+AFTER INSERT
+AS
+BEGIN
+	IF EXISTS (
+		SELECT *
+		FROM INSERTED I
+		INNER JOIN GIONGVN G
+		ON I.MAGIONG = G.MAGIONG
+		WHERE G.LOAIVN = 'Bo'
+		AND DATEDIFF(MONTH, NGBD, NGXUATDK) < 12
+	)
+	BEGIN
+		PRINT N'LỖI: CÁC GIỐNG VẬT NUÔI....'
+		ROLLBACK TRAN
+	END
+	ELSE
+	BEGIN
+			PRINT N'Thêm thành công'
+	END
+END
+GO
+
+-- 5. Tìm các giống vật nuôi (MAGIONG, TENGIONG) thuộc loại “Bo” được chăn nuôi theo phương thức “thả tự do” dự kiến xuất trong tháng 12/2024 (1đ)
+SELECT DISTINCT A.MAGIONG, TENGIONG
+FROM GIONGVN A
+INNER JOIN DOTCN B ON A.MAGIONG = B.MAGIONG
+WHERE LOAIVN = 'Bo' AND PHGTHUC = 'Tha tu do' AND YEAR(NGXUATDK) = 2024
+AND MONTH(NGXUATDK) = 12
+-- 6. Tìm cơ sở chăn nuôi (MACS, TENCS) chưa có giấy phép chăn nuôi nào được cấp 
+-- cho giống vật nuôi thuộc loại “De” nhưng đã từng có đợt chăn nuôi các giống vật 
+-- nuôi loại này trong năm 2024 (1đ). 
+SELECT DISTINCT MACS, TENCS
+FROM CSCHANNUOI CS
+WHERE NOT EXISTS (SELECT *
+				  FROM CTGP, GPCN, GIONGVN
+				  WHERE CTGP.MAGP = GPCN.MAGP
+				  AND CTGP.MAGIONG = GIONGVN.MAGIONG
+				  AND GPCN.MACS = CS.MACS
+				  AND LOAIVN = 'De')
+AND EXISTS (SELECT *
+			FROM DOTCN, GIONGVN
+			WHERE DOTCN.MAGIONG = GIONGVN.MAGIONG
+			AND DOTCN.MACS = CS.MACS
+			AND LOAIVN = 'De'
+			AND YEAR(NGBD) = 2024)
+-- 7. Tính thời gian nuôi thực tế trung bình (theo đơn vị tháng) của từng loại vật nuôi 
+-- theo từng hình thức chăn nuôi (1đ). 
+SELECT G.LOAIVN, D.MAGIONG, AVG((YEAR(NGXUATDK) - YEAR(NGBD)) * 12 + (MONTH(NGXUATDK) - MONTH(NGBD))) AS TGAVG
+FROM DOTCN D
+	INNER JOIN GIONGVN G ON D.MAGIONG = G.MAGIONG
+GROUP BY G.LOAIVN, D.MAGIONG
+
+-- 8. Với từng loại vật nuôi tìm giống vật nuôi(MAGIONG) từng được cấp phép với 
+-- tổng số lượng nhiều nhất năm 2024 (1đ). 
+SELECT G.LOAIVN, G.MAGIONG
+FROM GIONGVN G
+	INNER JOIN CTGP C ON G.MAGIONG = C.MAGIONG
+	INNER JOIN GPCN GP ON GP.MAGP = C.MAGP
+	WHERE YEAR(NGCAP) = 2024
+	GROUP BY G.LOAIVN, G.MAGIONG
+HAVING SUM(SL) >= ALL (SELECT SUM(SL)
+						FROM GIONGVN G
+						INNER JOIN CTGP C ON G.MAGIONG = C.MAGIONG
+						INNER JOIN GPCN GP ON GP.MAGP = C.MAGP
+						WHERE YEAR(NGCAP) = 2024
+						GROUP BY G.MAGIONG)
+--9.Tìm cơ sở chăn nuôi (MACS, TENCS) đã được cấp phép chăn nuôi tất cả các 
+--giống của loại vật nuôi “Bo” với số lượng mỗi giống đều từ 20 trở lên (1đ).
+SELECT MACS, TENCS
+FROM CSCHANNUOI
+WHERE NOT EXISTS ( SELECT MAGIONG
+					FROM GIONGVN
+					WHERE NOT EXISTS (
+										SELECT *
+										FROM GPCN
+										INNER JOIN CTGP ON GPCN.MAGP = CTGP.MAGP
+										AND CTGP.SL > 20
+										AND GIONGVN.MAGIONG = CTGP.MAGIONG
+										AND GIONGVN.LOAIVN = 'Bo'))
